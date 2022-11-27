@@ -2,41 +2,75 @@
 #include <NMEAGPS.h>
 #include <SH1106Wire.h>
 #include <math.h>
+#include <SPI.h>
+#include <SD.h>
 
-SH1106Wire Display(0x3c, SDA, SCL);
-NMEAGPS GPS;
-SoftwareSerial SerialGPS(D3, D4);
-
-struct GpsFormat {
+struct GpsFormat {  
   String Latitude;
   String Longitude;
 };
 
+struct Timings {
+  const unsigned long DisplayInterval = 3000;
+  const unsigned long LoggingInterval = 10000;
+
+  bool ShouldDisplay() {
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - LastDisplay > DisplayInterval) {
+      LastDisplay = currentMillis;
+      return true;
+    }
+
+    return false;
+  }
+
+  bool ShouldLog() {
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - LastLog > LoggingInterval) {
+      LastLog = currentMillis;
+      return true;
+    }
+
+    return false;
+  }
+
+  unsigned long LastDisplay = 0;
+  unsigned long LastLog = 0;
+  unsigned long LastPosition = 0;
+};
+
+SH1106Wire Display(0x3c, SDA, SCL);
+NMEAGPS GPS;
+SoftwareSerial SerialGPS(D3, D4);
+//Timings ActionTimings = {0, 0, 0};
+
 void setup() {
   Serial.begin(9600);
   SerialGPS.begin(9600);
+  SD.begin(4);
   Display.init();
   Display.flipScreenVertically();  
   Display.clear();  
   Display.display();
 }
 
-void drawGPSscreen(GpsFormat gpsFormat) {    
+void drawGPSscreen(GpsFormat GPSformat) {    
   Display.clear();  
-  //Display.display();
 
   Display.setTextAlignment(TEXT_ALIGN_LEFT);
   Display.setFont(Monospaced_plain_10);
 
-  Display.drawHorizontalLine(0, 35, 128);  
-  Display.drawString(0, 40, "lat: " + gpsFormat.Latitude);  
+  Display.drawHorizontalLine(0, 35, 128);    
+  Display.drawString(0, 40, "lat: " + GPSformat.Latitude);  
   Display.drawCircle(52, 45, 2);  
-  Display.drawString(0, 50, "lng: " + gpsFormat.Longitude);  
+  Display.drawString(0, 50, "lng: " + GPSformat.Longitude);  
   Display.drawCircle(52, 55, 2);
   Display.display();
 }
 
-void drawGPSdebug(gps_fix &GPSfix) {
+void GPSdebug(gps_fix &GPSfix) {
   if (GPSfix.valid.location) {
 		Serial.println("location float");	
 		Serial.printf("%f\n", GPSfix.latitude());
@@ -65,20 +99,40 @@ void drawGPSdebug(gps_fix &GPSfix) {
 	}
 }
 
-void logToSDcard(GpsFormat gpsFormat) {
+void logToSDcard(gps_fix &GPSfix) {
+  File file = SD.open("log.csv");
 
+  if (file && GPSfix.valid.date && GPSfix.valid.location) {    
+    file.printf("%f,%f\n", GPSfix.latitude(), GPSfix.longitude());
+    file.close();
+  }
 }
 
-GpsFormat formatFix(gps_fix &gps_fix) {  
+void drawLoadingScreen() {  
+  Display.clear();
+
+  unsigned long ms = millis();
+  int positionOffset = 10;
+
+  if (ms % 3000 == 0) positionOffset = 30;
+  if (ms % 2000 == 0) positionOffset = 20;
+
+  Display.fillCircle(positionOffset, 30, 6);
+
+  Display.display();  
+  delay(500);
+}
+
+GpsFormat formatFix(gps_fix &GPSfix) {  
   String latString = " --  --.--' -";
   String lngString = "---  --.--' -"; 
   
-  if (gps_fix.valid.location) {
+  if (GPSfix.valid.location) {
     char latitudeBuff[40];
     char longitudeBuff[40];  
 
-    float latitudeFloat  = gps_fix.latitude();
-    float longitudeFloat = gps_fix.longitude();
+    float latitudeFloat  = GPSfix.latitude();
+    float longitudeFloat = GPSfix.longitude();
 
     char latHem = 'N';
     char lngHem = 'E';
@@ -105,7 +159,7 @@ GpsFormat formatFix(gps_fix &gps_fix) {
     lngString = longitudeBuff;    
   }
 
-  GpsFormat result = {
+  GpsFormat result = {    
     latString,
     lngString    
   };
@@ -117,11 +171,18 @@ void GPSloop()
 {
 	while (GPS.available(SerialGPS)) {		
     gps_fix GPSfix = GPS.read();
-    GpsFormat gpsFormat = formatFix(GPSfix);
-    drawGPSdebug(GPSfix);		
-    drawGPSscreen(gpsFormat);		
-    logToSDcard(gpsFormat);
-	}    
+    
+    //if (ActionTimings.ShouldDisplay()) {
+      GpsFormat GPSformat = formatFix(GPSfix);
+      drawGPSscreen(GPSformat);		
+    //}    
+    
+    //if (ActionTimings.ShouldLog()) {
+      //logToSDcard(GPSfix);
+    //}
+
+    GPSdebug(GPSfix);		        
+	}      
 }
 
 void loop() {    
