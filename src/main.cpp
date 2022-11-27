@@ -8,8 +8,8 @@ NMEAGPS GPS;
 SoftwareSerial SerialGPS(D3, D4);
 
 struct GpsFormat {
-  char* Latitude;
-  char* Longitude;
+  String Latitude;
+  String Longitude;
 };
 
 void setup() {
@@ -22,15 +22,16 @@ void setup() {
 }
 
 void drawGPSscreen(GpsFormat gpsFormat) {    
+  Display.clear();  
+  //Display.display();
+
   Display.setTextAlignment(TEXT_ALIGN_LEFT);
   Display.setFont(Monospaced_plain_10);
 
-  Display.drawHorizontalLine(0, 35, 128);
-  //Display.drawString(0, 40, "lat:  50  19.34'");  
-  Display.drawString(0, 40, "lat: " + String(gpsFormat.Latitude));  
-  Display.drawCircle(52, 45, 2);
-  //Display.drawString(0, 50, "lng: 019  12.34'");  
-  Display.drawString(0, 50, "lng: " + String(gpsFormat.Longitude));  
+  Display.drawHorizontalLine(0, 35, 128);  
+  Display.drawString(0, 40, "lat: " + gpsFormat.Latitude);  
+  Display.drawCircle(52, 45, 2);  
+  Display.drawString(0, 50, "lng: " + gpsFormat.Longitude);  
   Display.drawCircle(52, 55, 2);
   Display.display();
 }
@@ -39,10 +40,7 @@ void drawGPSdebug(gps_fix &GPSfix) {
   if (GPSfix.valid.location) {
 		Serial.println("location float");	
 		Serial.printf("%f\n", GPSfix.latitude());
-    Serial.printf("%f\n", GPSfix.longitude());  			
-    Serial.println("location int");		
-    Serial.printf("%d\n", GPSfix.latitudeL());
-		Serial.printf("%d\n", GPSfix.longitudeL());  			    
+    Serial.printf("%f\n", GPSfix.longitude());  			    
 	}
 
 	if (GPSfix.valid.date) {
@@ -71,13 +69,14 @@ void logToSDcard(GpsFormat gpsFormat) {
 
 }
 
-//190391997
-//502563175
 GpsFormat formatFix(gps_fix &gps_fix) {  
-  //char latitudeString[255] =  " --  --.--' -";
-  //char longitudeString[255] = "---  --.--' -";  
+  String latString = " --  --.--' -";
+  String lngString = "---  --.--' -"; 
   
   if (gps_fix.valid.location) {
+    char latitudeBuff[40];
+    char longitudeBuff[40];  
+
     float latitudeFloat  = gps_fix.latitude();
     float longitudeFloat = gps_fix.longitude();
 
@@ -97,24 +96,18 @@ GpsFormat formatFix(gps_fix &gps_fix) {
     int lngMinutes = (int)lngMinutesFloat;        
 
     int latMinutesDecimal =  (int)ceill((latMinutesFloat - latMinutes) * 100);
-    int lngMinutesDecimal =  (int)ceill((lngMinutesFloat - lngMinutes) * 100);
-    
-    Serial.printf(" %02d  %02d.%02d' %c", latDegrees, latMinutes, latMinutesDecimal, latHem);
-    Serial.println();
-    Serial.printf("%03d  %02d.%02d' %c", lngDegrees, lngMinutes, lngMinutesDecimal, lngHem);
+    int lngMinutesDecimal =  (int)ceill((lngMinutesFloat - lngMinutes) * 100);    
 
-    //sprintf(latitudeString, " %02d  %02d.%02d' %c", latDegrees, latMinutes, latMinutesDecimal, latHem);
-    //sprintf(longitudeString, "%03d  %02d.%02d' %c", lngDegrees, lngMinutes, lngMinutesDecimal, lngHem);
+    sprintf(latitudeBuff, " %02d  %02d.%02d' %c", latDegrees, latMinutes, latMinutesDecimal, latHem);
+    sprintf(longitudeBuff, "%03d  %02d.%02d' %c", lngDegrees, lngMinutes, lngMinutesDecimal, lngHem);
 
-    //Serial.println(latitudeString);
-    //Serial.println(longitudeString);
+    latString = latitudeBuff;
+    lngString = longitudeBuff;    
   }
 
   GpsFormat result = {
-    " --  --.--' -",
-    "---  --.--' -"
-    //latitudeString,
-    //longitudeString
+    latString,
+    lngString    
   };
 
   return result;
