@@ -1,142 +1,136 @@
-#include <Wire.h>               // Only needed for Arduino 1.6.5 and earlier
-#include "SH1106Wire.h"   // legacy: #include "SH1106.h"
+#include <SoftwareSerial.h>
+#include <NMEAGPS.h>
+#include <SH1106Wire.h>
+#include <math.h>
 
-SH1106Wire display(0x3c, SDA, SCL);
-//SSD1306Wire display(0x3c, SDA, SCL);   // ADDRESS, SDA, SCL  -  SDA and SCL usually populate automatically based on your board's pins_arduino.h e.g. https://github.com/esp8266/Arduino/blob/master/variants/nodemcu/pins_arduino.h
-//SSD1306Wire display(0x3c, D3, D5);  // ADDRESS, SDA, SCL  -  If not, they can be specified manually.
-//SSD1306Wire display(0x3c, SDA, SCL, GEOMETRY_128_32);  // ADDRESS, SDA, SCL, OLEDDISPLAY_GEOMETRY  -  Extra param required for 128x32 displays.
-//SH1106Wire display(0x3c, SDA, SCL);     // ADDRESS, SDA, SCL
+SH1106Wire Display(0x3c, SDA, SCL);
+NMEAGPS GPS;
+SoftwareSerial SerialGPS(D3, D4);
 
-// Initialize the OLED display using brzo_i2c:
-// SSD1306Brzo display(0x3c, D3, D5);  // ADDRESS, SDA, SCL
-// or
-// SH1106Brzo display(0x3c, D3, D5);   // ADDRESS, SDA, SCL
-
-// Initialize the OLED display using SPI:
-// D5 -> CLK
-// D7 -> MOSI (DOUT)
-// D0 -> RES
-// D2 -> DC
-// D8 -> CS
-// SSD1306Spi display(D0, D2, D8);  // RES, DC, CS
-// or
-// SH1106Spi display(D0, D2);       // RES, DC
-
-#define DEMO_DURATION 3000
-typedef void (*Demo)(void);
-
-int demoMode = 0;
-int counter = 1;
+struct GpsFormat {
+  char* Latitude;
+  char* Longitude;
+};
 
 void setup() {
-  Serial.begin(115200);
-  Serial.println();
-  Serial.println();
+  Serial.begin(9600);
+  SerialGPS.begin(9600);
+  Display.init();
+  Display.flipScreenVertically();  
+  Display.clear();  
+  Display.display();
+}
 
+void drawGPSscreen(GpsFormat gpsFormat) {    
+  Display.setTextAlignment(TEXT_ALIGN_LEFT);
+  Display.setFont(Monospaced_plain_10);
 
-  // Initialising the UI will init the display too.
-  display.init();
+  Display.drawHorizontalLine(0, 35, 128);
+  //Display.drawString(0, 40, "lat:  50  19.34'");  
+  Display.drawString(0, 40, "lat: " + String(gpsFormat.Latitude));  
+  Display.drawCircle(52, 45, 2);
+  //Display.drawString(0, 50, "lng: 019  12.34'");  
+  Display.drawString(0, 50, "lng: " + String(gpsFormat.Longitude));  
+  Display.drawCircle(52, 55, 2);
+  Display.display();
+}
 
-  display.flipScreenVertically();
-  display.setFont(ArialMT_Plain_10);
+void drawGPSdebug(gps_fix &GPSfix) {
+  if (GPSfix.valid.location) {
+		Serial.println("location float");	
+		Serial.printf("%f\n", GPSfix.latitude());
+    Serial.printf("%f\n", GPSfix.longitude());  			
+    Serial.println("location int");		
+    Serial.printf("%d\n", GPSfix.latitudeL());
+		Serial.printf("%d\n", GPSfix.longitudeL());  			    
+	}
+
+	if (GPSfix.valid.date) {
+		Serial.println("date");	
+		Serial.printf("%d %d %d\n", GPSfix.dateTime.year, GPSfix.dateTime.month, GPSfix.dateTime.date);
+	}
+
+	if (GPSfix.valid.time) {
+		Serial.println("time");	
+		Serial.printf("%d %d %d\n", GPSfix.dateTime.hours, GPSfix.dateTime.minutes, GPSfix.dateTime.seconds);
+	}	
+
+	if (GPSfix.valid.speed) {
+		Serial.println("speed");	
+		Serial.printf("%f KT\n", GPSfix.speed());    
+	}
+
+	if (GPSfix.valid.heading) {
+		Serial.println("heading");	
+		Serial.printf("%f DEG\n", GPSfix.heading());
+    Serial.printf("%d DEG\n", GPSfix.heading_cd());    
+	}
+}
+
+void logToSDcard(GpsFormat gpsFormat) {
 
 }
 
-void drawFontFaceDemo() {
-  // Font Demo1
-  // create more fonts at http://oleddisplay.squix.ch/
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.setFont(ArialMT_Plain_10);
-  display.drawString(0, 0, "Hello world");
-  display.setFont(ArialMT_Plain_16);
-  display.drawString(0, 10, "Hello world");
-  display.setFont(ArialMT_Plain_24);
-  display.drawString(0, 26, "Hello world");
-}
+//190391997
+//502563175
+GpsFormat formatFix(gps_fix &gps_fix) {  
+  //char latitudeString[255] =  " --  --.--' -";
+  //char longitudeString[255] = "---  --.--' -";  
+  
+  if (gps_fix.valid.location) {
+    float latitudeFloat  = gps_fix.latitude();
+    float longitudeFloat = gps_fix.longitude();
 
-void drawTextFlowDemo() {
-  display.setFont(ArialMT_Plain_10);
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.drawStringMaxWidth(0, 0, 128,
-                             "Lorem ipsum\n dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore." );
-}
+    char latHem = 'N';
+    char lngHem = 'E';
 
-void drawTextAlignmentDemo() {
-  // Text alignment demo
-  display.setFont(ArialMT_Plain_10);
+    if (latitudeFloat  < 0) latHem = 'S';
+    if (longitudeFloat < 0) lngHem = 'W';
 
-  // The coordinates define the left starting point of the text
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.drawString(0, 10, "Left aligned (0,10)");
+    int latDegrees = abs(latitudeFloat);
+    int lngDegrees = abs(longitudeFloat);
 
-  // The coordinates define the center of the text
-  display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.drawString(64, 22, "Center aligned (64,22)");
+    float latMinutesFloat = (abs(latitudeFloat)  - latDegrees) * 60;
+    float lngMinutesFloat = (abs(longitudeFloat) - lngDegrees) * 60;
 
-  // The coordinates define the right end of the text
-  display.setTextAlignment(TEXT_ALIGN_RIGHT);
-  display.drawString(128, 33, "Right aligned (128,33)");
-}
+    int latMinutes = (int)latMinutesFloat;
+    int lngMinutes = (int)lngMinutesFloat;        
 
-void drawRectDemo() {
-  // Draw a pixel at given position
-  for (int i = 0; i < 10; i++) {
-    display.setPixel(i, i);
-    display.setPixel(10 - i, i);
+    int latMinutesDecimal =  (int)ceill((latMinutesFloat - latMinutes) * 100);
+    int lngMinutesDecimal =  (int)ceill((lngMinutesFloat - lngMinutes) * 100);
+    
+    Serial.printf(" %02d  %02d.%02d' %c", latDegrees, latMinutes, latMinutesDecimal, latHem);
+    Serial.println();
+    Serial.printf("%03d  %02d.%02d' %c", lngDegrees, lngMinutes, lngMinutesDecimal, lngHem);
+
+    //sprintf(latitudeString, " %02d  %02d.%02d' %c", latDegrees, latMinutes, latMinutesDecimal, latHem);
+    //sprintf(longitudeString, "%03d  %02d.%02d' %c", lngDegrees, lngMinutes, lngMinutesDecimal, lngHem);
+
+    //Serial.println(latitudeString);
+    //Serial.println(longitudeString);
   }
-  display.drawRect(12, 12, 20, 20);
 
-  // Fill the rectangle
-  display.fillRect(14, 14, 17, 17);
+  GpsFormat result = {
+    " --  --.--' -",
+    "---  --.--' -"
+    //latitudeString,
+    //longitudeString
+  };
 
-  // Draw a line horizontally
-  display.drawHorizontalLine(0, 40, 20);
-
-  // Draw a line horizontally
-  display.drawVerticalLine(40, 0, 20);
+  return result;
 }
 
-void drawCircleDemo() {
-  for (int i = 1; i < 8; i++) {
-    display.setColor(WHITE);
-    display.drawCircle(32, 32, i * 3);
-    if (i % 2 == 0) {
-      display.setColor(BLACK);
-    }
-    display.fillCircle(96, 32, 32 - i * 3);
-  }
+void GPSloop()
+{
+	while (GPS.available(SerialGPS)) {		
+    gps_fix GPSfix = GPS.read();
+    GpsFormat gpsFormat = formatFix(GPSfix);
+    drawGPSdebug(GPSfix);		
+    drawGPSscreen(gpsFormat);		
+    logToSDcard(gpsFormat);
+	}    
 }
 
-void drawProgressBarDemo() {
-  int progress = (counter / 5) % 100;
-  // draw the progress bar
-  display.drawProgressBar(0, 32, 120, 10, progress);
-
-  // draw the percentage as String
-  display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.drawString(64, 15, String(progress) + "%");
-}
-
-Demo demos[] = {drawFontFaceDemo, drawTextFlowDemo, drawTextAlignmentDemo, drawRectDemo, drawCircleDemo, drawProgressBarDemo};
-int demoLength = (sizeof(demos) / sizeof(Demo));
-long timeSinceLastModeSwitch = 0;
-
-void loop() {
-  // clear the display
-  display.clear();
-  // draw the current demo method
-  demos[demoMode]();
-
-  display.setFont(ArialMT_Plain_10);
-  display.setTextAlignment(TEXT_ALIGN_RIGHT);
-  display.drawString(128, 54, String(millis()));
-  // write the buffer to the display
-  display.display();
-
-  if (millis() - timeSinceLastModeSwitch > DEMO_DURATION) {
-    demoMode = (demoMode + 1)  % demoLength;
-    timeSinceLastModeSwitch = millis();
-  }
-  counter++;
-  delay(10);
+void loop() {    
+  GPSloop();  
 }
