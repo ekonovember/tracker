@@ -1,23 +1,37 @@
 #include <SoftwareSerial.h>
 #include <NMEAGPS.h>
+#include <Wire.h>
 #include <SH1106Wire.h>
 #include <math.h>
 #include <SPI.h>
 #include <SD.h>
+#include <LinkedList.h>
+
+bool VALID_FIX_ONLY_WITH_HEADING = false;
+bool ENABLE_SERIAL_DEBUGGING     = true;
 
 struct GpsFormat {  
   String Latitude;
   String Longitude;
 };
 
-struct Timings {
-  const unsigned long DisplayInterval = 3000;
-  const unsigned long LoggingInterval = 10000;
+class Timings {
+  const unsigned long DisplayInterval    =  2 * 1000;
+  const unsigned long LoggingInterval    =  5 * 1000;
+  const unsigned long CardUpdateInterval = 60 * 1000;
+
+  unsigned long LastDisplay = 0;
+  unsigned long LastLog = 0;
+  unsigned long LastPosition = 0;
+  unsigned long LastCardUpdate = 0;
+
+public:
+  Timings() { }
 
   bool ShouldDisplay() {
     unsigned long currentMillis = millis();
 
-    if (currentMillis - LastDisplay > DisplayInterval) {
+    if ((currentMillis - LastDisplay) > DisplayInterval) {
       LastDisplay = currentMillis;
       return true;
     }
@@ -26,9 +40,9 @@ struct Timings {
   }
 
   bool ShouldLog() {
-    unsigned long currentMillis = millis();
+    unsigned long currentMillis = millis();        
 
-    if (currentMillis - LastLog > LoggingInterval) {
+    if ((currentMillis - LastLog) > LoggingInterval) {
       LastLog = currentMillis;
       return true;
     }
@@ -36,21 +50,47 @@ struct Timings {
     return false;
   }
 
-  unsigned long LastDisplay = 0;
-  unsigned long LastLog = 0;
-  unsigned long LastPosition = 0;
+  bool ShouldUpdateCard() {
+    unsigned long currentMillis = millis();
+
+    if ((currentMillis - LastCardUpdate) > CardUpdateInterval) {
+      LastCardUpdate = currentMillis;
+      return true;
+    }
+
+    return false;
+  }  
 };
+
+void DEBUG(String message) {
+  if (!ENABLE_SERIAL_DEBUGGING) { return; }
+
+  Serial.println(message);	
+}
 
 SH1106Wire Display(0x3c, SDA, SCL);
 NMEAGPS GPS;
 SoftwareSerial SerialGPS(D3, D4);
-//Timings ActionTimings = {0, 0, 0};
+Timings ActionTimings = Timings();
+LinkedList<gps_fix*> GPSDataList = LinkedList<gps_fix*>();
 
 void setup() {
-  Serial.begin(9600);
-  SerialGPS.begin(9600);
-  SD.begin(4);
-  Display.init();
+  if (ENABLE_SERIAL_DEBUGGING) {
+    Serial.begin(9600);
+    while(!Serial) delay(2000);
+    DEBUG("Serial working");
+  }  
+
+  while(!Display.init()) delay(2000);
+  DEBUG("Display working");
+
+  SerialGPS.begin(9600);  
+  while(!SerialGPS) delay(2000);
+  DEBUG("GPS working");
+  
+  while(!SD.begin(D8)) delay(2000);  
+  DEBUG("SD working");
+
   Display.flipScreenVertically();  
   Display.clear();  
   Display.display();
@@ -58,19 +98,25 @@ void setup() {
 
 void drawGPSscreen(GpsFormat GPSformat) {    
   Display.clear();  
-
+  
+  if (ENABLE_SERIAL_DEBUGGING) { Display.setPixel(millis() % 128, 1); }  
+  
   Display.setTextAlignment(TEXT_ALIGN_LEFT);
-  Display.setFont(Monospaced_plain_10);
+  Display.setFont(Monospaced_plain_10);  
 
+  //position
   Display.drawHorizontalLine(0, 35, 128);    
   Display.drawString(0, 40, "lat: " + GPSformat.Latitude);  
   Display.drawCircle(52, 45, 2);  
   Display.drawString(0, 50, "lng: " + GPSformat.Longitude);  
   Display.drawCircle(52, 55, 2);
+  
   Display.display();
 }
 
 void GPSdebug(gps_fix &GPSfix) {
+  if (!ENABLE_SERIAL_DEBUGGING) { return; }
+
   if (GPSfix.valid.location) {
 		Serial.println("location float");	
 		Serial.printf("%f\n", GPSfix.latitude());
@@ -99,28 +145,25 @@ void GPSdebug(gps_fix &GPSfix) {
 	}
 }
 
-void logToSDcard(gps_fix &GPSfix) {
-  File file = SD.open("log.csv");
+void logToSDcard(String fileName, LinkedList<gps_fix*> &positions) {
+  File file = SD.open(fileName, FILE_WRITE);
+  Serial.println(fileName);
 
-  if (file && GPSfix.valid.date && GPSfix.valid.location) {    
-    file.printf("%f,%f\n", GPSfix.latitude(), GPSfix.longitude());
-    file.close();
+  if (!file) { 
+    positions.clear();  
+    return; 
   }
-}
 
-void drawLoadingScreen() {  
-  Display.clear();
+  for (int i = 0; i < positions.size(); ++i) {
+    gps_fix* current = positions.get(i);
+    file.printf("%f,%f\n", current->latitude(), current->longitude());
+    Serial.print(".");
+  }
 
-  unsigned long ms = millis();
-  int positionOffset = 10;
-
-  if (ms % 3000 == 0) positionOffset = 30;
-  if (ms % 2000 == 0) positionOffset = 20;
-
-  Display.fillCircle(positionOffset, 30, 6);
-
-  Display.display();  
-  delay(500);
+  Serial.println();
+      
+  file.close();
+  positions.clear();  
 }
 
 GpsFormat formatFix(gps_fix &GPSfix) {  
@@ -167,20 +210,42 @@ GpsFormat formatFix(gps_fix &GPSfix) {
   return result;
 }
 
-void GPSloop()
-{
+bool isValidFix(gps_fix &GPSfix) {
+  bool validHeadingAndSpeed = !VALID_FIX_ONLY_WITH_HEADING || (
+    GPSfix.valid.heading && GPSfix.valid.speed
+  );
+
+  return GPSfix.valid.location &&
+         GPSfix.valid.date &&
+         validHeadingAndSpeed;
+}
+
+String formatFileName(gps_fix &GPSfix) {
+  return String(GPSfix.dateTime.full_year()) + "-" 
+       + String(GPSfix.dateTime.month) + "-"
+       + String(GPSfix.dateTime.date) + ".csv";
+}
+
+void GPSloop() {
 	while (GPS.available(SerialGPS)) {		
     gps_fix GPSfix = GPS.read();
     
-    //if (ActionTimings.ShouldDisplay()) {
-      GpsFormat GPSformat = formatFix(GPSfix);
-      drawGPSscreen(GPSformat);		
-    //}    
-    
-    //if (ActionTimings.ShouldLog()) {
-      //logToSDcard(GPSfix);
-    //}
+    if (ActionTimings.ShouldDisplay()) {      
+      DEBUG("printing to display");
+      GpsFormat GPSformat = formatFix(GPSfix);      
+      drawGPSscreen(GPSformat);		      
+    }    
+        
+    if (ActionTimings.ShouldLog() && isValidFix(GPSfix)) {
+      DEBUG("logging to memory");
+      GPSDataList.add(&GPSfix);
 
+      if (ActionTimings.ShouldUpdateCard()) {        
+        DEBUG("logging SD card");
+        logToSDcard(formatFileName(GPSfix), GPSDataList);
+      }
+    }
+      
     GPSdebug(GPSfix);		        
 	}      
 }
