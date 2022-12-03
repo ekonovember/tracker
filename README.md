@@ -6,7 +6,7 @@ Yet another GPS tracker based on arduino/nodemcu platform. The main reason for p
 After connecting to power supply tracker will immediately display received data (placeholders for missing data). You should be able to see:
 * UTC - time and date (in UTC)
 * COG - course over ground (i degrees)
-* SOG - pseed over ground (in KT)
+* SOG - speed over ground (in KT)
 * lat - latitude dd° mm.mm' N/S
 * lng - longitude ddd° mm.mm' E/W
 
