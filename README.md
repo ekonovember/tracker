@@ -115,6 +115,13 @@ bool VALID_FIX_ONLY_WITH_HEADING = true;
 bool ENABLE_SERIAL_DEBUGGING     = false;
 ```
 
+If you happen to have SSD1306 display driver you will have to change the import accordingly
+
+```c++
+//source file: src/main.cpp
+#include <SH1106Wire.h> // look up the library and change accordingly
+```
+
 ## Debugging
 By leaving *ENABLE_SERIAL_DEBUGGING* set to true it is possible to observe debug data via serial monitor (baud rate 9600).
 
