@@ -19,9 +19,9 @@ Loggin interval is 5s - data logged is latitude, longitude, time, date, speed an
 SD card is updated each minute (when there are log entries stored in memory). Display update period is 2s.
 
 ### Display
-![no picture][sd_picture]
+![no picture][display_picture]
 
-[sd_picture]: ./pictures/display_picture.png "Display overview"
+[display_picture]: ./pictures/display_picture.png "Display overview"
 
 ### Environment
 This project has been created using *PlatformIO* and *VS Code*. Dependencies (libraries) needed for this project to run are defined in *platformio.ini* file. After the project is built the libraries will be restored in *.pio/libdeps/nodemcuv2/* folder. Look [here](https://www.youtube.com/watch?v=dany7ae_0ks) for IDE setup. Find below the dependencies listed:
