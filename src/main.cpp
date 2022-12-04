@@ -164,12 +164,14 @@ void setup() {
 void GPSdebug(gps_fix &GPSfix) {
   if (!ENABLE_SERIAL_DEBUGGING) { return; }
     
-  if(GPSfix.valid.lat_err &&
-     GPSfix.valid.lon_err &&
-     GPSfix.valid.hdg_err) {
-      Serial.println("errors");
+  if (GPSfix.valid.lat_err && GPSfix.valid.lon_err) {
+      Serial.println("position errors");
       Serial.printf("latitude error: %f\n", GPSfix.lat_err());
-      Serial.printf("longitude error: %f\n", GPSfix.lon_err());
+      Serial.printf("longitude error: %f\n", GPSfix.lon_err());      
+  }
+
+  if (GPSfix.valid.hdg_err) {
+      Serial.println("heading error");
       Serial.printf("heading error: %f\n", GPSfix.hdg_err());
   }
 
