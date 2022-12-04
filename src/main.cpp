@@ -9,6 +9,7 @@
 bool VALID_FIX_ONLY_WITH_HEADING = false;
 bool ENABLE_SERIAL_DEBUGGING     = true;
 int BUTTON_PIN = D0;
+float POSITION_ACCURACY_THRESHOLD = 7.0;
 
 struct GpsFormat {  
   String DateTime;
@@ -348,13 +349,15 @@ GpsFormat formatFix(gps_fix &GPSfix) {
 }
 
 bool isValidFix(bool validFixOnlyWithHeading, gps_fix &GPSfix, MotionStateMonitor motionMonitor) {
-  bool validHeadingAndSpeed = !validFixOnlyWithHeading || (
-    motionMonitor.IsInMovingState()
-  );
+  bool validHeadingAndSpeed = !validFixOnlyWithHeading || motionMonitor.IsInMovingState();
 
   return GPSfix.valid.location &&
          GPSfix.valid.date &&
          GPSfix.valid.time &&
+         GPSfix.valid.lat_err &&
+         GPSfix.valid.lon_err &&
+         GPSfix.lat_err() <= POSITION_ACCURACY_THRESHOLD &&
+         GPSfix.lon_err() <= POSITION_ACCURACY_THRESHOLD &&         
          validHeadingAndSpeed;
 }
 
