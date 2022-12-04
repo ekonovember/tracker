@@ -167,6 +167,7 @@ void GPSdebug(gps_fix &GPSfix) {
   if(GPSfix.valid.lat_err &&
      GPSfix.valid.lon_err &&
      GPSfix.valid.hdg_err) {
+      Serial.println("errors");
       Serial.printf("latitude error: %f\n", GPSfix.lat_err());
       Serial.printf("longitude error: %f\n", GPSfix.lon_err());
       Serial.printf("heading error: %f\n", GPSfix.hdg_err());
