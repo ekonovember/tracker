@@ -94,7 +94,7 @@ Some GPS settings need to be changed directly in files installed from dependenci
 #define NMEAGPS_PARSE_GLL
 #define NMEAGPS_PARSE_GSA
 #define NMEAGPS_PARSE_GSV
-//#define NMEAGPS_PARSE_GST
+#define NMEAGPS_PARSE_GST
 #define NMEAGPS_PARSE_RMC
 #define NMEAGPS_PARSE_VTG
 #define NMEAGPS_PARSE_ZDA
