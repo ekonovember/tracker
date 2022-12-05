@@ -364,7 +364,7 @@ GpsFormat formatFix(gps_fix &GPSfix) {
   return result;
 }
 
-bool isValidFix(bool validFixOnlyWithHeading, gps_fix &GPSfix, MotionStateMonitor motionMonitor) {
+bool isValidFix(bool validFixOnlyWithHeading, float accuracyThreshold, gps_fix &GPSfix, MotionStateMonitor motionMonitor) {
   bool validHeadingAndSpeed = !validFixOnlyWithHeading || motionMonitor.IsInMovingState();
 
   return GPSfix.valid.location &&
@@ -372,8 +372,8 @@ bool isValidFix(bool validFixOnlyWithHeading, gps_fix &GPSfix, MotionStateMonito
          GPSfix.valid.time &&
          GPSfix.valid.lat_err &&
          GPSfix.valid.lon_err &&
-         GPSfix.lat_err() <= POSITION_ACCURACY_THRESHOLD &&
-         GPSfix.lon_err() <= POSITION_ACCURACY_THRESHOLD &&         
+         GPSfix.lat_err() <= accuracyThreshold &&
+         GPSfix.lon_err() <= accuracyThreshold &&         
          validHeadingAndSpeed;
 }
 
@@ -409,7 +409,13 @@ void GPSloop() {
 
     DisplayMonitor.SetState(digitalRead(BUTTON_PIN), Display);
 
-    if (ActionTimings.ShouldLog() && isValidFix(VALID_FIX_ONLY_WITH_HEADING, GPSfix, MotionMonitor)) {
+    bool isValidForLogging = isValidFix(
+      VALID_FIX_ONLY_WITH_HEADING,
+      POSITION_ACCURACY_THRESHOLD,
+      GPSfix,
+      MotionMonitor);
+
+    if (ActionTimings.ShouldLog() && isValidForLogging) {
       DEBUG("logging to memory");
       GPSDataList.add(GPSfix);
 
