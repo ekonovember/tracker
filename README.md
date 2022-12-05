@@ -156,3 +156,14 @@ By leaving *ENABLE_SERIAL_DEBUGGING* set to true it is possible to observe debug
 //source file: src/main.cpp
 bool ENABLE_SERIAL_DEBUGGING     = true;
 ```
+
+if you decide to leave:
+```c++
+bool VALID_FIX_ONLY_WITH_HEADING = true;
+```
+
+this will store positions to SD card without the requirement for movement, the data will be stored when:
+- valid fix
+- valid position
+- valid date and time
+- mean accuracy better than 7m
