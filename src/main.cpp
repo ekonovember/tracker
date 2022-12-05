@@ -372,8 +372,7 @@ bool isValidFix(bool validFixOnlyWithHeading, float accuracyThreshold, gps_fix &
          GPSfix.valid.time &&
          GPSfix.valid.lat_err &&
          GPSfix.valid.lon_err &&
-         GPSfix.lat_err() <= accuracyThreshold &&
-         GPSfix.lon_err() <= accuracyThreshold &&         
+         ((GPSfix.lat_err() + GPSfix.lon_err()) / 2) <= accuracyThreshold &&          
          validHeadingAndSpeed;
 }
 
